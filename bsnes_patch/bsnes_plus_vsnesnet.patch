@@ -1,0 +1,59 @@
+diff -rupN bsnes-plus-master/bsnes/snes/cpu/mmio/mmio.cpp bsnes-plus-master_patch/bsnes/snes/cpu/mmio/mmio.cpp
+--- bsnes-plus-master/bsnes/snes/cpu/mmio/mmio.cpp	2015-04-26 01:13:32.000000000 +0200
++++ bsnes-plus-master_patch/bsnes/snes/cpu/mmio/mmio.cpp	2015-05-07 23:03:23.309643855 +0200
+@@ -1,3 +1,5 @@
++#include <fcntl.h>
++
+ #ifdef CPU_CPP
+ 
+ uint8 CPU::pio() { return status.pio; }
+@@ -66,8 +68,49 @@ void CPU::mmio_w4200(uint8 data) {
+ 
+ //WRIO
+ void CPU::mmio_w4201(uint8 data) {
++	
++  //is only called when register updates
++  static char init=0;
++  static int out_fd;
++  static uint8 last_state;
++	
+   if((status.pio & 0x80) && !(data & 0x80)) ppu.latch_counters();
+   status.pio = data;
++  
++  //last_state=data;
++  if(init==0){
++		last_state=0x00;
++		//open file descriptor
++		out_fd=open("/tmp/snes_wrio.fifo", O_WRONLY);
++		
++		if (out_fd==-1) {
++			perror("WRIO: file open error");
++			init=-1;
++		}else{
++			init=1;
++		}
++	}
++ 
++
++	if(init && data!=0xff){
++		
++	   char output[2];
++	   output[1]='\0';
++
++		if((data==0xC0 || data==0x80) && (last_state==0x00 || last_state==0x40)){
++		
++		if(data==0xC0) output[0]=0x31; else output[0]=0x30;
++			
++			if (write(out_fd, output, sizeof(output))==-1) {
++            
++            perror("WRIO: write error");
++            init=-1;
++			}
++		}
++
++		last_state=data;
++ }
++
+ }
+ 
+ //WRMPYA
